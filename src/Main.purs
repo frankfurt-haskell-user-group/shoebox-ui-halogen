@@ -2,8 +2,11 @@ module Main where
 
 import Prelude
 import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (CONSOLE, log)
+import Halogen.Aff (HalogenEffects, awaitBody, runHalogenAff)
+import Halogen.VDom.Driver (runUI)
 
-main :: forall e. Eff (console :: CONSOLE | e) Unit
-main = do
-  log "Hello sailor!"
+import GlossingPage (ui)
+
+main :: Eff (HalogenEffects ()) Unit
+main = runHalogenAff $ awaitBody >>= runUI ui unit
+

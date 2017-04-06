@@ -9,6 +9,6 @@
     "dist"
   ],
   "dependencies": {
-    "purescript-halogen": "^1.0.0"
+    "purescript-halogen": "^1.2.1"
   }
 }
