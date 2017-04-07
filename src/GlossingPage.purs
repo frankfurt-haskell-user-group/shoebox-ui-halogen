@@ -11,16 +11,21 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Network.HTTP.Affjax as AX
+import Network.HTTP.Affjax (AJAX)
 
-type State = { word   :: String
-             , result :: String
+import Api (queryWord)
+
+type State = { word          :: String
+             , segmentations :: String
+             , lexicon       :: String
+             , prefixes      :: String
+             , suffixes      :: String
              }
 
 data Query a = UpdateWord String a
              | QueryWord a
 
-ui :: forall eff. H.Component HH.HTML Query Unit Void (Aff (ajax :: AX.AJAX | eff))
+ui :: forall eff. H.Component HH.HTML Query Unit Void (Aff (ajax :: AJAX | eff))
 ui = H.component
     { initialState : const initialState
     , render
@@ -29,8 +34,11 @@ ui = H.component
     }
   where
     initialState :: State
-    initialState = { word   : ""
-                   , result : ""
+    initialState = { word          : ""
+                   , segmentations : ""
+                   , lexicon       : ""
+                   , prefixes      : ""
+                   , suffixes      : ""
                    }
 
     render :: State -> H.ComponentHTML Query
@@ -45,18 +53,23 @@ ui = H.component
             , HE.onClick $ HE.input_ QueryWord
             ]
             [ HH.text "Query Word" ]
-        , HH.p_ [ HH.text st.result ]
+        , HH.p_ [ HH.text st.segmentations ]
+        , HH.p_ [ HH.text st.lexicon ]
+        , HH.p_ [ HH.text st.prefixes ]
+        , HH.p_ [ HH.text st.suffixes ]
         ]
 
-    eval :: Query ~> H.ComponentDSL State Query Void (Aff (ajax :: AX.AJAX | eff))
+    eval :: Query ~> H.ComponentDSL State Query Void (Aff (ajax :: AJAX | eff))
     eval (UpdateWord word next) = do
         H.modify $ _ { word = word }
         pure next
     eval (QueryWord next) = do
         word <- H.gets _.word
-        response <- H.liftAff $ AX.post url $ "\"" <> word <> "\""
-        H.modify $ _ { result = response.response }
+        result <- H.liftAff $ queryWord word
+        H.modify $ _ { segmentations = result.segmentations
+                     , lexicon       = result.lexicon
+                     , prefixes      = result.prefixes
+                     , suffixes      = result.suffixes
+                     }
         pure next
-      where
-        url = "http://localhost:3000/api/query/word"
 
