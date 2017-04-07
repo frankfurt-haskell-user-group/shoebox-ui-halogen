@@ -5,6 +5,7 @@ module GlossingPage
 
 import Prelude
 import Control.Monad.Aff (Aff)
+import Data.Foldable (intercalate)
 import Data.Maybe (Maybe(Nothing))
 import Data.String (null)
 import Halogen as H
@@ -13,13 +14,13 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Network.HTTP.Affjax (AJAX)
 
-import Api (queryWord)
+import Api (Morpheme, queryWord)
 
 type State = { word          :: String
-             , segmentations :: String
-             , lexicon       :: String
-             , prefixes      :: String
-             , suffixes      :: String
+             , segmentations :: Array (Array Morpheme)
+             , lexicon       :: Array String
+             , prefixes      :: Array String
+             , suffixes      :: Array String
              }
 
 data Query a = UpdateWord String a
@@ -35,10 +36,10 @@ ui = H.component
   where
     initialState :: State
     initialState = { word          : ""
-                   , segmentations : ""
-                   , lexicon       : ""
-                   , prefixes      : ""
-                   , suffixes      : ""
+                   , segmentations : []
+                   , lexicon       : []
+                   , prefixes      : []
+                   , suffixes      : []
                    }
 
     render :: State -> H.ComponentHTML Query
@@ -53,10 +54,13 @@ ui = H.component
             , HE.onClick $ HE.input_ QueryWord
             ]
             [ HH.text "Query Word" ]
-        , HH.p_ [ HH.text st.segmentations ]
-        , HH.p_ [ HH.text st.lexicon ]
-        , HH.p_ [ HH.text st.prefixes ]
-        , HH.p_ [ HH.text st.suffixes ]
+        , HH.p_ [ HH.text $ intercalate "/"
+                          $ intercalate "-" <<< map show
+                          <$> st.segmentations
+                ]
+        , HH.p_ [ HH.text $ intercalate "/" st.lexicon ]
+        , HH.p_ [ HH.text $ intercalate "/" st.prefixes ]
+        , HH.p_ [ HH.text $ intercalate "/" st.suffixes ]
         ]
 
     eval :: Query ~> H.ComponentDSL State Query Void (Aff (ajax :: AJAX | eff))
