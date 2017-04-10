@@ -1,5 +1,5 @@
 module Api
-    ( Morpheme
+    ( Morpheme(..)
     , queryWord
     ) where
 
@@ -23,11 +23,6 @@ type DbEntries =
 data Morpheme = MorphemeLexicon String
               | MorphemePrefix  String
               | MorphemeSuffix  String
-
-instance showMorpheme :: Show Morpheme where
-    show (MorphemeLexicon lex) = lex
-    show (MorphemePrefix  pre) = pre
-    show (MorphemeSuffix  suf) = suf
 
 instance decodeMorpheme :: DecodeJson Morpheme where
     decodeJson json = do

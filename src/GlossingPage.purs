@@ -7,20 +7,19 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import Data.Foldable (intercalate)
 import Data.Maybe (Maybe(Nothing))
-import Data.String (null)
+import Data.Monoid (mempty)
+import Data.Traversable (sequence)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Network.HTTP.Affjax (AJAX)
 
-import Api (Morpheme, queryWord)
+import Api (Morpheme(..), queryWord)
 
-type State = { word          :: String
-             , segmentations :: Array (Array Morpheme)
-             , lexicon       :: Array String
-             , prefixes      :: Array String
-             , suffixes      :: Array String
+type State = { word         :: String
+             , segmentation :: String
+             , gloss        :: String
              }
 
 data Query a = UpdateWord String a
@@ -35,11 +34,9 @@ ui = H.component
     }
   where
     initialState :: State
-    initialState = { word          : ""
-                   , segmentations : []
-                   , lexicon       : []
-                   , prefixes      : []
-                   , suffixes      : []
+    initialState = { word         : ""
+                   , segmentation : ""
+                   , gloss        : ""
                    }
 
     render :: State -> H.ComponentHTML Query
@@ -50,17 +47,12 @@ ui = H.component
             , HE.onValueInput $ HE.input UpdateWord
             ]
         , HH.button
-            [ HP.disabled $ null st.word
+            [ HP.disabled $ st.word == mempty
             , HE.onClick $ HE.input_ QueryWord
             ]
             [ HH.text "Query Word" ]
-        , HH.p_ [ HH.text $ intercalate "/"
-                          $ intercalate "-" <<< map show
-                          <$> st.segmentations
-                ]
-        , HH.p_ [ HH.text $ intercalate "/" st.lexicon ]
-        , HH.p_ [ HH.text $ intercalate "/" st.prefixes ]
-        , HH.p_ [ HH.text $ intercalate "/" st.suffixes ]
+        , HH.p_ [ HH.text st.segmentation ]
+        , HH.p_ [ HH.text st.gloss ]
         ]
 
     eval :: Query ~> H.ComponentDSL State Query Void (Aff (ajax :: AJAX | eff))
@@ -70,10 +62,44 @@ ui = H.component
     eval (QueryWord next) = do
         word <- H.gets _.word
         result <- H.liftAff $ queryWord word
-        H.modify $ _ { segmentations = result.segmentations
-                     , lexicon       = result.lexicon
-                     , prefixes      = result.prefixes
-                     , suffixes      = result.suffixes
-                     }
+        if result.lexicon /= mempty
+           then H.modify $ _ { segmentation = showAlt result.lexicon
+                             , gloss        = showAlt result.lexicon
+                             }
+           else do
+               glosses <- H.liftAff $ querySegmentations result.segmentations
+               H.modify $ _ { segmentation = showSegmentations result.segmentations
+                            , gloss        = showGlosses glosses
+                            }
         pure next
+      where
+        showAlt :: Array String -> String
+        showAlt = intercalate "/"
+
+        showSeq :: Array String -> String
+        showSeq = intercalate "-"
+
+        showSegmentations :: Array (Array Morpheme) -> String
+        showSegmentations = showAlt <<< map (showSeq <<< map showMorpheme)
+
+        showMorpheme :: Morpheme -> String
+        showMorpheme (MorphemeLexicon lex) = lex
+        showMorpheme (MorphemePrefix  pre) = pre
+        showMorpheme (MorphemeSuffix  suf) = suf
+
+        showGlosses :: Array (Array (Array String)) -> String
+        showGlosses = showAlt <<< map showSeq <<< (map $ map showAlt)
+
+        querySegmentations :: Array (Array Morpheme)
+                           -> Aff (ajax :: AJAX | eff) (Array (Array (Array String)))
+        querySegmentations = sequence <<< map querySegmentation
+
+        querySegmentation :: Array Morpheme
+                          -> Aff (ajax :: AJAX | eff) (Array (Array String))
+        querySegmentation = sequence <<< map queryGlosses
+
+        queryGlosses :: Morpheme -> Aff (ajax :: AJAX | eff) (Array String)
+        queryGlosses (MorphemeLexicon lex) = _.lexicon  <$> queryWord lex
+        queryGlosses (MorphemePrefix  pre) = _.prefixes <$> queryWord pre
+        queryGlosses (MorphemeSuffix  suf) = _.suffixes <$> queryWord suf
 
