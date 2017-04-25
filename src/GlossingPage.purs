@@ -15,14 +15,19 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Network.HTTP.Affjax (AJAX)
 
-import Api (Morpheme(..), queryWord)
+import Api (Morpheme(..), queryDb)
 
-type State = { word         :: String
+type Word = String
+type Choice = Array
+type Sequence = Array
+type Gloss = String
+
+type State = { word         :: Word
              , segmentation :: String
              , gloss        :: String
              }
 
-data Query a = UpdateWord String a
+data Query a = UpdateWord Word a
              | QueryWord a
 
 ui :: forall eff. H.Component HH.HTML Query Unit Void (Aff (ajax :: AJAX | eff))
@@ -61,45 +66,45 @@ ui = H.component
         pure next
     eval (QueryWord next) = do
         word <- H.gets _.word
-        result <- H.liftAff $ queryWord word
-        if result.lexicon /= mempty
-           then H.modify $ _ { segmentation = showAlt result.lexicon
-                             , gloss        = showAlt result.lexicon
+        result <- H.liftAff $ queryDb word
+        if result.meanings /= mempty
+           then H.modify $ _ { segmentation = showChoice result.meanings
+                             , gloss        = showChoice result.meanings
                              }
            else do
-               glosses <- H.liftAff $ querySegmentations result.segmentations
-               H.modify $ _ { segmentation = showSegmentations result.segmentations
+               glosses <- H.liftAff $ querySegmentations result.morphemeBreaks
+               H.modify $ _ { segmentation = showSegmentations result.morphemeBreaks
                             , gloss        = showGlosses glosses
                             }
         pure next
       where
-        showAlt :: Array String -> String
-        showAlt = intercalate "/"
+        showChoice :: Choice String -> String
+        showChoice = intercalate "/"
 
-        showSeq :: Array String -> String
+        showSeq :: Sequence String -> String
         showSeq = intercalate "-"
 
-        showSegmentations :: Array (Array Morpheme) -> String
-        showSegmentations = showAlt <<< map (showSeq <<< map showMorpheme)
+        showSegmentations :: Choice (Sequence Morpheme) -> String
+        showSegmentations = showChoice <<< map (showSeq <<< map showMorpheme)
 
         showMorpheme :: Morpheme -> String
-        showMorpheme (MorphemeLexicon lex) = lex
-        showMorpheme (MorphemePrefix  pre) = pre
-        showMorpheme (MorphemeSuffix  suf) = suf
+        showMorpheme (MorphemeLemma  lemma ) = lemma
+        showMorpheme (MorphemePrefix prefix) = prefix
+        showMorpheme (MorphemeSuffix suffix) = suffix
 
-        showGlosses :: Array (Array (Array String)) -> String
-        showGlosses = showAlt <<< map showSeq <<< (map $ map showAlt)
+        showGlosses :: Choice (Sequence (Choice Gloss)) -> String
+        showGlosses = showChoice <<< map showSeq <<< (map $ map showChoice)
 
-        querySegmentations :: Array (Array Morpheme)
-                           -> Aff (ajax :: AJAX | eff) (Array (Array (Array String)))
+        querySegmentations :: Choice (Sequence Morpheme)
+                           -> Aff (ajax :: AJAX | eff) (Choice (Sequence (Choice Gloss)))
         querySegmentations = sequence <<< map querySegmentation
 
-        querySegmentation :: Array Morpheme
-                          -> Aff (ajax :: AJAX | eff) (Array (Array String))
+        querySegmentation :: Sequence Morpheme
+                          -> Aff (ajax :: AJAX | eff) (Sequence (Choice Gloss))
         querySegmentation = sequence <<< map queryGlosses
 
-        queryGlosses :: Morpheme -> Aff (ajax :: AJAX | eff) (Array String)
-        queryGlosses (MorphemeLexicon lex) = _.lexicon  <$> queryWord lex
-        queryGlosses (MorphemePrefix  pre) = _.prefixes <$> queryWord pre
-        queryGlosses (MorphemeSuffix  suf) = _.suffixes <$> queryWord suf
+        queryGlosses :: Morpheme -> Aff (ajax :: AJAX | eff) (Choice Gloss)
+        queryGlosses (MorphemeLemma  lemma ) = _.meanings   <$> queryDb lemma
+        queryGlosses (MorphemePrefix prefix) = _.prefixTags <$> queryDb prefix
+        queryGlosses (MorphemeSuffix suffix) = _.suffixTags <$> queryDb suffix
 
